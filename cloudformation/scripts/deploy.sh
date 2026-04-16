@@ -8,7 +8,7 @@
 # Prerequisites:
 #   - AWS CLI configured (aws configure)
 #   - Python 3.x with pip
-#   - Bedrock models enabled (see README — enable Titan Embed v2 and Claude 3.5 Haiku)
+#   - Bedrock models enabled (see README — Titan Embed v2 in us-east-1, Nova Pro via APAC inference profile)
 
 set -euo pipefail
 
