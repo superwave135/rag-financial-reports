@@ -1,14 +1,18 @@
 # RAG Financial Reports
 
+[![AWS](https://img.shields.io/badge/AWS-Cloud-orange?logo=amazon-aws)](https://aws.amazon.com/)
+[![CloudFormation](https://img.shields.io/badge/CloudFormation-IaC-red?logo=amazon-aws)](https://aws.amazon.com/cloudformation/)
+[![Python](https://img.shields.io/badge/Python-3.11-blue?logo=python)](https://www.python.org/)
+[![Amazon Bedrock](https://img.shields.io/badge/Amazon%20Bedrock-Nova%20Pro-FF9900?logo=amazon-aws)](https://aws.amazon.com/bedrock/)
+[![OpenSearch](https://img.shields.io/badge/OpenSearch-Serverless-005EB8?logo=opensearch)](https://aws.amazon.com/opensearch-service/)
+[![AWS Lambda](https://img.shields.io/badge/AWS%20Lambda-Serverless-F90?logo=aws-lambda)](https://aws.amazon.com/lambda/)
+[![API Gateway](https://img.shields.io/badge/API%20Gateway-REST-FF4F8B?logo=amazon-aws)](https://aws.amazon.com/api-gateway/)
+
 Serverless Retrieval-Augmented Generation (RAG) system on AWS for querying listed company financial reports (Apple, Nvidia, Amazon, Google, etc.) using natural language.
 
 Upload annual reports (10-K) or quarterly reports (10-Q) to S3 in any supported format. The system automatically ingests, chunks, and embeds them into a vector store. Query via REST API.
 
 **Supported file formats:** `.pdf`, `.docx`, `.xlsx`, `.csv`, `.html` / `.htm`, `.txt`
-
-###### Git push from local to remote
-git remote set-url origin git@github.com:superwave135/rag-financial-reports.git
-git push -u origin main
 
 ## Architecture
 
