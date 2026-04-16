@@ -271,7 +271,7 @@ curl -s -X POST "https://9ouylj253k.execute-api.ap-southeast-1.amazonaws.com/pro
 | OpenSearch Serverless | ~$0.24/hour (~$175/month) when active |
 | Lambda | Near zero for occasional queries |
 | Bedrock Titan Embed | ~$0.02 per 1M tokens |
-| Bedrock Amazon Nova Pro (apac.amazon.nova-pro-v1:0) | ~$0.80/$4.00 per 1M input/output tokens |
+| Bedrock Amazon Nova Pro (apac.amazon.nova-pro-v1:0) | ~$0.0008/$0.0032 per 1K input/output tokens |
 | S3 | Negligible |
 
 **OpenSearch Serverless is the dominant cost.** If you are not using the system continuously, tear down the stack after use.
