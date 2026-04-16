@@ -54,9 +54,8 @@ REPORTS_BUCKET=$(aws cloudformation describe-stacks \
     --output text 2>/dev/null || echo "")
 
 if [ -n "${REPORTS_BUCKET}" ]; then
-    echo "  Note: reports bucket s3://${REPORTS_BUCKET} is kept (PDFs preserved)."
-    echo "  CloudFormation will fail to delete the bucket if it is non-empty — that is expected."
-    echo "  The bucket will remain after stack deletion and can be reused on next deploy."
+    echo "  Emptying reports bucket: s3://${REPORTS_BUCKET}"
+    aws s3 rm "s3://${REPORTS_BUCKET}" --recursive --region "${REGION}" || true
 fi
 
 echo ""

@@ -15,7 +15,7 @@ git push -u origin main
 ```
   INGESTION (automatic on S3 upload)
   ────────────────────────────────────────────────────────────────
-  S3 (reports/AAPL/annual/2024/...)
+  S3 (reports/AAPL/annual/2025/...)
       │  S3 ObjectCreated event
       ▼
   Ingest Lambda
@@ -26,13 +26,13 @@ git push -u origin main
 
   QUERY (on demand via API)
   ────────────────────────────────────────────────────────────────
-  POST /query  {"question": "...", "ticker": "AAPL", "fiscal_period": "2024"}
+  POST /query  {"question": "...", "ticker": "AAPL", "fiscal_period": "2025"}
       │
       ▼
   API Gateway → Query Lambda
       ├─ Bedrock Titan Embed v2 → embed question
       ├─ OpenSearch Serverless k-NN search (optional company/period filters)
-      ├─ Bedrock Claude 3.5 Haiku → grounded answer from retrieved excerpts
+      ├─ Bedrock Amazon Nova Pro (apac.amazon.nova-pro-v1:0) → grounded answer from retrieved excerpts
       └─ Response: {answer, sources[]}
 ```
 
@@ -44,7 +44,7 @@ git push -u origin main
 | Lambda (Ingest) | File → extract text → chunks → embeddings → OpenSearch |
 | Lambda (Query) | Question → embed → kNN → Claude → answer |
 | Bedrock Titan Embed v2 | Text embeddings (1024 dimensions) |
-| Bedrock Claude 3.5 Haiku | Financial Q&A generation |
+| Bedrock Amazon Nova Pro (apac.amazon.nova-pro-v1:0) | Financial Q&A generation |
 | OpenSearch Serverless | Vector store + metadata-filtered search |
 | API Gateway | REST endpoint (`POST /query`) |
 | IAM | Least-privilege roles for Lambda |
@@ -58,7 +58,7 @@ git push -u origin main
 
 3. **Bedrock model access** — the following models are used and must be accessible in your account:
    - **Amazon Titan Embed Text v2** (`amazon.titan-embed-text-v2:0`)
-   - **Anthropic Claude 3.5 Haiku** (`anthropic.claude-haiku-4-5-20251001-v1:0`)
+   - **Amazon Nova Pro (apac.amazon.nova-pro-v1:0)** (`apac.amazon.nova-pro-v1:0`)
 
    As of 2025, AWS automatically enables Bedrock foundation models on first invocation — no manual activation needed. However, **first-time Anthropic model users** may be prompted to submit use case details before access is granted. If your queries return a Bedrock access error, check the Model catalog in the AWS Console and complete any required steps for the Anthropic model.
 
@@ -100,8 +100,8 @@ reports/{TICKER}/{report_type}/{fiscal_period}/{filename}.{ext}
 |---|---|---|
 | `TICKER` | Company ticker (uppercase) | `AAPL`, `NVDA`, `AMZN`, `GOOGL` |
 | `report_type` | `annual`, `quarterly`, `other` | `annual` |
-| `fiscal_period` | Year or year+quarter | `2024`, `2024Q3` |
-| `filename` | Any descriptive filename | `AAPL-10K-2024.pdf` |
+| `fiscal_period` | Year or year+quarter | `2025`, `2025Q3` |
+| `filename` | Any descriptive filename | `AAPL-10K-2025.pdf` |
 | `ext` | Supported format extension | `.pdf`, `.docx`, `.xlsx`, `.csv`, `.html`, `.htm`, `.txt` |
 
 ### Using the upload script
@@ -110,18 +110,18 @@ reports/{TICKER}/{report_type}/{fiscal_period}/{filename}.{ext}
 # Single file (PDF)
 python scripts/upload_reports.py \
     --bucket fin-reports-rag-123456789012 \
-    --file ./sample-reports/AAPL-10K-2024.pdf \
+    --file ./sample-reports/AAPL-10K-2025.pdf \
     --ticker AAPL \
     --type annual \
-    --period 2024
+    --period 2025
 
 # Single file (HTML — e.g. SEC EDGAR filing)
 python scripts/upload_reports.py \
     --bucket fin-reports-rag-123456789012 \
-    --file ./sample-reports/GOOGL-10K-2024.html \
+    --file ./sample-reports/GOOGL-10K-2025.html \
     --ticker GOOGL \
     --type annual \
-    --period 2024
+    --period 2025
 
 # Bulk upload from CSV
 python scripts/upload_reports.py \
@@ -131,18 +131,20 @@ python scripts/upload_reports.py \
 
 CSV format (`reports.csv`):
 ```
-./sample-reports/AAPL-10K-2024.pdf,AAPL,annual,2024
-./sample-reports/NVDA-10K-2024.pdf,NVDA,annual,2024
-./sample-reports/AMZN-10K-2024.pdf,AMZN,annual,2024
-./sample-reports/GOOGL-10K-2024.html,GOOGL,annual,2024
+./sample-reports/AAPL-10K-2025.pdf,AAPL,annual,2025
+./sample-reports/NVDA-10K-2025.pdf,NVDA,annual,2025
+./sample-reports/AMZN-10K-2025.pdf,AMZN,annual,2025
+./sample-reports/GOOGL-10K-2025.html,GOOGL,annual,2025
 ```
 
 ### Upload files using AWS CLI directly
 
 ```bash
+aws s3 cp sample-reports/AAPL-10K-2025.pdf s3://fin-reports-rag-881786084229/reports/AAPL/annual/2025/AAPL-10K-2025.pdf --region ap-southeast-1
+aws s3 cp sample-reports/NVDA-10K-2025.pdf s3://fin-reports-rag-881786084229/reports/NVDA/annual/2025/NVDA-10K-2025.pdf --region ap-southeast-1
 aws s3 cp sample-reports/AMZN-10K-2025.pdf s3://fin-reports-rag-881786084229/reports/AMZN/annual/2025/AMZN-10K-2025.pdf --region ap-southeast-1
-
 ```
+
 ###### To watch the ingest Lambda logs in real time after uploading a PDF:
 The Ingest Lambda triggers automatically within seconds of each upload. Check Lambda logs in CloudWatch for progress. Large reports (100+ pages) take 2–5 minutes to index.
 
@@ -164,7 +166,7 @@ API_URL=$(aws cloudformation describe-stacks \
 # Ask a question
 python scripts/test_query.py \
     --url $API_URL \
-    --question "What was Apple's total revenue in FY2024?"
+    --question "What was Apple's total revenue in 2025?"
 
 # Filter by company
 python scripts/test_query.py \
@@ -177,14 +179,14 @@ python scripts/test_query.py \
     --url $API_URL \
     --question "What was net income?" \
     --ticker AAPL \
-    --period 2024
+    --period 2025
 ```
 
-###### Command Query
+### Command Query
 (.venv) geekytan@geeky:~/Documents/dev/rag-financial-reports$ python3 scripts/test_query.py \
-    --url "https://e8iqnnzxvf.execute-api.ap-southeast-1.amazonaws.com/prod/query" \
+    --url "https://9ouylj253k.execute-api.ap-southeast-1.amazonaws.com/prod/query" \
     --question "What was Apple's EPS in FY2025?"
-
+```
 ============================================================
   Question : What was Apple's EPS in FY2025?
   Top-K    : 5
@@ -198,6 +200,7 @@ Apple's basic earnings per share (EPS) in FY2025 was $7.49, and the diluted EPS 
 SOURCES  (1 report(s) cited)
 ------------------------------------------------------------
   AAPL   | ANNUAL     | FY2025     | reports/AAPL/annual/2025/AAPL-10K-2025.pdf
+```
 
 ### Query using curl
 
@@ -205,17 +208,17 @@ SOURCES  (1 report(s) cited)
 curl -X POST $API_URL \
     -H "Content-Type: application/json" \
     -d '{
-        "question": "What was Apple revenue in FY2024?",
+        "question": "What was Apple revenue in FY2025?",
         "ticker": "AAPL",
-        "fiscal_period": "2024"
+        "fiscal_period": "2025"
     }'
 ```
 
 (.venv) geekytan@geeky:~/Documents/dev/rag-financial-reports$ 
 ###### Command URL
-curl -s -X POST "https://e8iqnnzxvf.execute-api.ap-southeast-1.amazonaws.com/prod/query" -H "Content-Type: application/json" -d '{"question": "What was Nvidia total revenue in FY2025?", "ticker": "NVDA", "fiscal_period": "2025"}' | python3 -m json.tool
+curl -s -X POST "https://9ouylj253k.execute-api.ap-southeast-1.amazonaws.com/prod/query" -H "Content-Type: application/json" -d '{"question": "What was Apple total revenue in FY2025?", "ticker": "AAPL", "fiscal_period": "2025"}' | python3 -m json.tool
 
-curl -s -X POST "https://e8iqnnzxvf.execute-api.ap-southeast-1.amazonaws.com/prod/query" -H "Content-Type: application/json" -d '{"question": "What was key driver of growth for Amazon in FY2025?", "ticker": "AMZN", "fiscal_period": "2025"}' | python3 -m json.tool
+curl -s -X POST "https://9ouylj253k.execute-api.ap-southeast-1.amazonaws.com/prod/query" -H "Content-Type: application/json" -d '{"question": "What was the key driver of growth for Apple in FY2025?", "ticker": "AAPL", "fiscal_period": "2025"}' | python3 -m json.tool
 
 ###### Response Answer
 {
@@ -238,9 +241,9 @@ curl -s -X POST "https://e8iqnnzxvf.execute-api.ap-southeast-1.amazonaws.com/pro
 **Request:**
 ```json
 {
-    "question":      "What was Apple's gross margin in 2024?",
+    "question":      "What was Apple's gross margin in 2025?",
     "ticker":        "AAPL",      // optional — filter to one company
-    "fiscal_period": "2024",      // optional — filter to one period
+    "fiscal_period": "2025",      // optional — filter to one period
     "top_k":         5            // optional — chunks to retrieve (default 5)
 }
 ```
@@ -248,13 +251,13 @@ curl -s -X POST "https://e8iqnnzxvf.execute-api.ap-southeast-1.amazonaws.com/pro
 **Response:**
 ```json
 {
-    "answer": "Apple's gross margin for fiscal year 2024 was 46.2%...",
+    "answer": "Apple's gross margin for fiscal year 2025 was XX.X%...",
     "sources": [
         {
             "ticker":        "AAPL",
             "report_type":   "annual",
-            "fiscal_period": "2024",
-            "source":        "reports/AAPL/annual/2024/AAPL-10K-2024.pdf",
+            "fiscal_period": "2025",
+            "source":        "reports/AAPL/annual/2025/AAPL-10K-2025.pdf",
             "chunk_index":   47
         }
     ]
@@ -268,7 +271,7 @@ curl -s -X POST "https://e8iqnnzxvf.execute-api.ap-southeast-1.amazonaws.com/pro
 | OpenSearch Serverless | ~$0.24/hour (~$175/month) when active |
 | Lambda | Near zero for occasional queries |
 | Bedrock Titan Embed | ~$0.02 per 1M tokens |
-| Bedrock Claude 3.5 Haiku | ~$0.80/$4.00 per 1M input/output tokens |
+| Bedrock Amazon Nova Pro (apac.amazon.nova-pro-v1:0) | ~$0.80/$4.00 per 1M input/output tokens |
 | S3 | Negligible |
 
 **OpenSearch Serverless is the dominant cost.** If you are not using the system continuously, tear down the stack after use.
@@ -276,7 +279,7 @@ curl -s -X POST "https://e8iqnnzxvf.execute-api.ap-southeast-1.amazonaws.com/pro
 ## Teardown
 
 ```bash
-bash cloudformation/scripts/destroy.sh
+bash cloudformation/scripts/destroy.sh --region ap-southeast-1
 
 # Or with options
 bash cloudformation/scripts/destroy.sh --region ap-southeast-1 --env dev
@@ -284,6 +287,29 @@ bash cloudformation/scripts/destroy.sh --region ap-southeast-1 --env dev
 
 This deletes everything: the CloudFormation stack, all S3 buckets (including uploaded PDFs), the OpenSearch collection, and both Lambda functions.
 
+
+```
+Run these to verify each resource is deleted:
+
+
+# CloudFormation stack
+aws cloudformation describe-stacks --stack-name rag-financial-reports-dev --region ap-southeast-1 2>&1 | grep -E "StackStatus|does not exist"
+
+# OpenSearch collection
+aws opensearchserverless list-collections --region ap-southeast-1 --query 'collectionSummaries[?name==`fin-reports-rag`]'
+
+# Lambda functions
+aws lambda list-functions --region ap-southeast-1 --query 'Functions[?starts_with(FunctionName, `fin-reports-rag`)].FunctionName'
+
+# API Gateway
+aws apigateway get-rest-apis --region ap-southeast-1 --query 'items[?starts_with(name, `fin-reports-rag`)].name'
+
+# IAM role
+aws iam get-role --role-name fin-reports-rag-lambda-dev 2>&1 | grep -E "RoleName|cannot be found"
+
+# S3 bucket (should still exist)
+aws s3 ls s3://fin-reports-rag-881786084229 --region ap-southeast-1 | head -5
+```
 ## Updating Lambda Code
 
 If you modify the Lambda handler code without changing infrastructure:
@@ -293,7 +319,8 @@ If you modify the Lambda handler code without changing infrastructure:
 bash cloudformation/scripts/package-lambdas.sh
 
 # Re-deploy (CloudFormation detects the code change)
-bash cloudformation/scripts/deploy.sh
+bash cloudformation/scripts/deploy.sh --region ap-southeast-1
+
 ```
 
 ## Project Structure
