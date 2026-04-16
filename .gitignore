@@ -1,0 +1,34 @@
+# Lambda build artifacts
+dist/
+lambdas/ingest/package/
+lambdas/query/package/
+*.zip
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+.env
+
+# PDFs (put real reports in sample-reports/ locally but don't commit them)
+sample-reports/*.pdf
+
+# macOS
+.DS_Store
+
+# AWS credentials (never commit these)
+.aws/
+
+# IDE
+.vscode/
+.idea/
+
+# Claude Code
+.claude/
+CLAUDE.md
+
+# CloudFormation packaged templates (generated artifacts)
+cloudformation/packaged-template.yaml

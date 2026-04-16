@@ -1,0 +1,305 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  RAG Financial Reports — Serverless RAG on AWS for financial document analysis.
+  Ingest Apple, Nvidia, Amazon, Google annual/quarterly reports into a vector store,
+  then ask natural-language questions via a REST API.
+
+  Deploy:   bash cloudformation/scripts/deploy.sh
+  Teardown: bash cloudformation/scripts/destroy.sh
+
+Parameters:
+
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, prod]
+    Description: Deployment environment tag
+
+  CollectionName:
+    Type: String
+    Default: fin-reports-rag
+    Description: >
+      OpenSearch Serverless collection name.
+      Must be 3-32 characters, lowercase, hyphens allowed (not at start/end).
+
+  IndexName:
+    Type: String
+    Default: financial-reports
+    Description: OpenSearch index name for financial report chunks
+
+  LambdaDeploymentBucket:
+    Type: String
+    Description: >
+      S3 bucket containing the packaged Lambda zip files.
+      Created automatically by deploy.sh.
+
+  IngestLambdaS3Key:
+    Type: String
+    Default: lambdas/ingest.zip
+    Description: S3 key for the ingest Lambda deployment package
+
+  QueryLambdaS3Key:
+    Type: String
+    Default: lambdas/query.zip
+    Description: S3 key for the query Lambda deployment package
+
+Resources:
+
+  # ── OpenSearch Serverless — encryption policy ─────────────────────────────────
+  EncryptionPolicy:
+    Type: AWS::OpenSearchServerless::SecurityPolicy
+    Properties:
+      Name: !Sub "${CollectionName}-enc"
+      Type: encryption
+      Policy: !Sub >
+        {"Rules":[{"ResourceType":"collection","Resource":["collection/${CollectionName}"]}],"AWSOwnedKey":true}
+
+  # ── OpenSearch Serverless — network policy (public access) ────────────────────
+  NetworkPolicy:
+    Type: AWS::OpenSearchServerless::SecurityPolicy
+    Properties:
+      Name: !Sub "${CollectionName}-net"
+      Type: network
+      Policy: !Sub >
+        [{"Rules":[{"ResourceType":"collection","Resource":["collection/${CollectionName}"]},{"ResourceType":"dashboard","Resource":["collection/${CollectionName}"]}],"AllowFromPublic":true}]
+
+  # ── OpenSearch Serverless — vector collection ──────────────────────────────────
+  VectorCollection:
+    Type: AWS::OpenSearchServerless::Collection
+    DependsOn:
+      - EncryptionPolicy
+      - NetworkPolicy
+    Properties:
+      Name: !Ref CollectionName
+      Type: VECTORSEARCH
+
+  # ── IAM Role shared by both Lambda functions ───────────────────────────────────
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "fin-reports-rag-lambda-${Environment}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: FinReportsRagPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: BedrockModels
+                Effect: Allow
+                Action: bedrock:InvokeModel
+                Resource:
+                  - "arn:aws:bedrock:*::foundation-model/amazon.titan-embed-text-v2:0"
+                  - "arn:aws:bedrock:*::foundation-model/amazon.nova-pro-v1:0"
+                  - "arn:aws:bedrock:*:*:inference-profile/apac.amazon.nova-pro-v1:0"
+              - Sid: S3ReadReports
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub "arn:aws:s3:::fin-reports-rag-${AWS::AccountId}"
+                  - !Sub "arn:aws:s3:::fin-reports-rag-${AWS::AccountId}/*"
+              - Sid: OpenSearchAccess
+                Effect: Allow
+                Action: aoss:APIAccessAll
+                Resource: !GetAtt VectorCollection.Arn
+
+  # ── OpenSearch data access policy (let Lambda role index and search) ───────────
+  DataAccessPolicy:
+    Type: AWS::OpenSearchServerless::AccessPolicy
+    Properties:
+      Name: !Sub "${CollectionName}-access"
+      Type: data
+      Policy: !Sub >
+        [{"Rules":[{"ResourceType":"index","Resource":["index/${CollectionName}/*"],"Permission":["aoss:CreateIndex","aoss:WriteDocument","aoss:ReadDocument","aoss:DescribeIndex","aoss:DeleteIndex","aoss:UpdateIndex"]},{"ResourceType":"collection","Resource":["collection/${CollectionName}"],"Permission":["aoss:CreateCollectionItems","aoss:DescribeCollectionItems"]}],"Principal":["${LambdaRole.Arn}"]}]
+
+  # ── Ingest Lambda ──────────────────────────────────────────────────────────────
+  # Triggered when a PDF lands in S3 under reports/
+  # Chunks, embeds, and indexes the document into OpenSearch
+  IngestLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "fin-reports-rag-ingest-${Environment}"
+      Runtime: python3.11
+      Handler: handler.handler
+      Role: !GetAtt LambdaRole.Arn
+      Timeout: 600       # 10 minutes — large annual reports can have 100+ pages
+      MemorySize: 1024
+      Environment:
+        Variables:
+          OPENSEARCH_ENDPOINT: !GetAtt VectorCollection.CollectionEndpoint
+          INDEX_NAME: !Ref IndexName
+          COLLECTION_NAME: !Ref CollectionName
+          BEDROCK_REGION: us-east-1
+      Code:
+        S3Bucket: !Ref LambdaDeploymentBucket
+        S3Key: !Ref IngestLambdaS3Key
+
+  # ── Query Lambda ───────────────────────────────────────────────────────────────
+  # Called by API Gateway — embeds the question, searches OpenSearch, generates answer
+  QueryLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "fin-reports-rag-query-${Environment}"
+      Runtime: python3.11
+      Handler: handler.handler
+      Role: !GetAtt LambdaRole.Arn
+      Timeout: 30
+      MemorySize: 512
+      Environment:
+        Variables:
+          OPENSEARCH_ENDPOINT: !GetAtt VectorCollection.CollectionEndpoint
+          INDEX_NAME: !Ref IndexName
+          COLLECTION_NAME: !Ref CollectionName
+          BEDROCK_REGION: us-east-1
+          GENERATION_MODEL: apac.amazon.nova-pro-v1:0
+      Code:
+        S3Bucket: !Ref LambdaDeploymentBucket
+        S3Key: !Ref QueryLambdaS3Key
+
+  # ── S3 Bucket (financial report PDFs) ─────────────────────────────────────────
+  # Upload PDFs under reports/{TICKER}/{type}/{period}/file.pdf
+  # Each upload automatically triggers the Ingest Lambda
+  S3InvokeLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt IngestLambda.Arn
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceArn: !Sub "arn:aws:s3:::fin-reports-rag-${AWS::AccountId}"
+
+  ReportsBucket:
+    Type: AWS::S3::Bucket
+    DependsOn: S3InvokeLambdaPermission
+    Properties:
+      BucketName: !Sub "fin-reports-rag-${AWS::AccountId}"
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: "s3:ObjectCreated:*"
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: "reports/"
+                  - Name: suffix
+                    Value: ".pdf"
+            Function: !GetAtt IngestLambda.Arn
+
+  # ── API Gateway ────────────────────────────────────────────────────────────────
+  RestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub "fin-reports-rag-api-${Environment}"
+      Description: "Financial Reports RAG — natural language query API"
+
+  QueryResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: query
+
+  # POST /query — forwards to Query Lambda
+  QueryMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref QueryResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${QueryLambda.Arn}/invocations"
+
+  # OPTIONS /query — CORS preflight
+  QueryOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref QueryResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ""
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: "Empty"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  ApiGatewayPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt QueryLambda.Arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/*/POST/query"
+
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - QueryMethod
+      - QueryOptionsMethod
+    Properties:
+      RestApiId: !Ref RestApi
+
+  ApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref RestApi
+      DeploymentId: !Ref ApiDeployment
+      StageName: prod
+
+# ── Outputs ────────────────────────────────────────────────────────────────────
+Outputs:
+
+  ReportsBucketName:
+    Description: "Upload financial report PDFs here under reports/{TICKER}/{type}/{period}/"
+    Value: !Ref ReportsBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-ReportsBucket"
+
+  ApiUrl:
+    Description: "POST endpoint — send your financial questions here"
+    Value: !Sub "https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/prod/query"
+    Export:
+      Name: !Sub "${AWS::StackName}-ApiUrl"
+
+  OpenSearchEndpoint:
+    Description: "OpenSearch Serverless collection endpoint"
+    Value: !GetAtt VectorCollection.CollectionEndpoint
+    Export:
+      Name: !Sub "${AWS::StackName}-OpenSearchEndpoint"
+
+  ExampleUploadCommand:
+    Description: "Example: upload Apple FY2024 10-K to S3"
+    Value: !Sub "aws s3 cp AAPL-10K-2024.pdf s3://${ReportsBucket}/reports/AAPL/annual/2024/AAPL-10K-2024.pdf"
+
+  ExampleQueryCommand:
+    Description: "Example: query the API"
+    Value: !Sub >
+      curl -X POST https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/prod/query
+      -H 'Content-Type: application/json'
+      -d '{"question": "What was Apple revenue in 2024?", "ticker": "AAPL", "fiscal_period": "2024"}'

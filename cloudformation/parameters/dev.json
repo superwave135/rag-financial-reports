@@ -1,0 +1,5 @@
+[
+  { "ParameterKey": "Environment",        "ParameterValue": "dev" },
+  { "ParameterKey": "CollectionName",     "ParameterValue": "fin-reports-rag" },
+  { "ParameterKey": "IndexName",          "ParameterValue": "financial-reports" }
+]
