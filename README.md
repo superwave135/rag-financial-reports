@@ -73,10 +73,10 @@ Upload annual reports (10-K) or quarterly reports (10-Q) to S3 in any supported 
 git clone <your-repo-url>
 cd rag-financial-reports
 
-# Deploy to AWS (creates all resources)
-bash cloudformation/scripts/deploy.sh
+# Deploy to AWS (prompts for environment if --env not specified)
+bash cloudformation/scripts/deploy.sh --region ap-southeast-1
 
-# Optional: specify region and environment
+# Or specify environment directly
 bash cloudformation/scripts/deploy.sh --region ap-southeast-1 --env dev
 ```
 
@@ -113,7 +113,7 @@ reports/{TICKER}/{report_type}/{fiscal_period}/{filename}.{ext}
 ```bash
 # Single file (PDF)
 python scripts/upload_reports.py \
-    --bucket fin-reports-rag-123456789012 \
+    --bucket fin-reports-rag-dev-{AccountId} \
     --file ./sample-reports/AAPL-10K-2025.pdf \
     --ticker AAPL \
     --type annual \
@@ -121,7 +121,7 @@ python scripts/upload_reports.py \
 
 # Single file (HTML — e.g. SEC EDGAR filing)
 python scripts/upload_reports.py \
-    --bucket fin-reports-rag-123456789012 \
+    --bucket fin-reports-rag-dev-{AccountId} \
     --file ./sample-reports/GOOGL-10K-2025.html \
     --ticker GOOGL \
     --type annual \
@@ -129,7 +129,7 @@ python scripts/upload_reports.py \
 
 # Bulk upload from CSV
 python scripts/upload_reports.py \
-    --bucket fin-reports-rag-123456789012 \
+    --bucket fin-reports-rag-dev-{AccountId} \
     --batch reports.csv
 ```
 
@@ -144,9 +144,9 @@ CSV format (`reports.csv`):
 ### Upload files using AWS CLI directly
 
 ```bash
-aws s3 cp sample-reports/AAPL-10K-2025.pdf s3://fin-reports-rag-881786084229/reports/AAPL/annual/2025/AAPL-10K-2025.pdf --region ap-southeast-1
-aws s3 cp sample-reports/NVDA-10K-2025.pdf s3://fin-reports-rag-881786084229/reports/NVDA/annual/2025/NVDA-10K-2025.pdf --region ap-southeast-1
-aws s3 cp sample-reports/AMZN-10K-2025.pdf s3://fin-reports-rag-881786084229/reports/AMZN/annual/2025/AMZN-10K-2025.pdf --region ap-southeast-1
+aws s3 cp sample-reports/AAPL-10K-2025.pdf s3://fin-reports-rag-dev-{AccountId}/reports/AAPL/annual/2025/AAPL-10K-2025.pdf --region ap-southeast-1
+aws s3 cp sample-reports/NVDA-10K-2025.pdf s3://fin-reports-rag-dev-{AccountId}/reports/NVDA/annual/2025/NVDA-10K-2025.pdf --region ap-southeast-1
+aws s3 cp sample-reports/AMZN-10K-2025.pdf s3://fin-reports-rag-dev-{AccountId}/reports/AMZN/annual/2025/AMZN-10K-2025.pdf --region ap-southeast-1
 ```
 
 ###### To watch the ingest Lambda logs in real time after uploading a PDF:
@@ -283,9 +283,10 @@ curl -s -X POST "https://9ouylj253k.execute-api.ap-southeast-1.amazonaws.com/pro
 ## Teardown
 
 ```bash
+# Prompts for environment if --env not specified
 bash cloudformation/scripts/destroy.sh --region ap-southeast-1
 
-# Or with options
+# Or specify environment directly
 bash cloudformation/scripts/destroy.sh --region ap-southeast-1 --env dev
 ```
 
@@ -300,7 +301,7 @@ Run these to verify each resource is deleted:
 aws cloudformation describe-stacks --stack-name rag-financial-reports-dev --region ap-southeast-1 2>&1 | grep -E "StackStatus|does not exist"
 
 # OpenSearch collection
-aws opensearchserverless list-collections --region ap-southeast-1 --query 'collectionSummaries[?name==`fin-reports-rag`]'
+aws opensearchserverless list-collections --region ap-southeast-1 --query 'collectionSummaries[?name==`fin-reports-rag-dev`]'
 
 # Lambda functions
 aws lambda list-functions --region ap-southeast-1 --query 'Functions[?starts_with(FunctionName, `fin-reports-rag`)].FunctionName'
@@ -311,8 +312,8 @@ aws apigateway get-rest-apis --region ap-southeast-1 --query 'items[?starts_with
 # IAM role
 aws iam get-role --role-name fin-reports-rag-lambda-dev 2>&1 | grep -E "RoleName|cannot be found"
 
-# S3 bucket (should still exist)
-aws s3 ls s3://fin-reports-rag-881786084229 --region ap-southeast-1 | head -5
+# S3 bucket (confirm deleted)
+aws s3 ls s3://fin-reports-rag-dev-{AccountId} --region ap-southeast-1 2>&1
 ```
 ## Updating Lambda Code
 
