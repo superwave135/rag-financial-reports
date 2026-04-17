@@ -11,15 +11,15 @@ Ingest Lambda returned `403 Forbidden` from OpenSearch Serverless on all index a
 
 **Root Cause**
 The CloudFormation data access policy principal was set to the Lambda IAM role ARN
-(`arn:aws:iam::881786084229:role/fin-reports-rag-lambda-dev`), but the actual identity
+(`arn:aws:iam::{AccountId}:role/fin-reports-rag-lambda-dev`), but the actual identity
 Lambda presents at runtime is an *assumed-role* session ARN:
-`arn:aws:sts::881786084229:assumed-role/fin-reports-rag-lambda-dev/fin-reports-rag-ingest-dev`.
+`arn:aws:sts::{AccountId}:assumed-role/fin-reports-rag-lambda-dev/fin-reports-rag-ingest-dev`.
 OpenSearch Serverless does exact-string matching on the principal — the two forms don't match.
 88XXXXXXXXX9
 **Fix**
 Changed the data access policy principal to the account root:
 ```
-arn:aws:iam::881786084229:root
+arn:aws:iam::{AccountId}:root
 ```
 The account root covers all principals in the account, so both Lambda functions are
 automatically authorised regardless of their session ARN.
@@ -37,14 +37,14 @@ the function is running as — compare it against what's in the data access poli
 
 **Root Cause**
 The script defaulted to `us-east-1` and tried to upload to
-`rag-fin-deploy-881786084229-us-east-1`, which was never created.
+`rag-fin-deploy-{AccountId}-us-east-1`, which was never created.
 The stack was deployed to `ap-southeast-1`.
 
 **Fix**
 Always pass `--region ap-southeast-1` to the deploy script, or upload the zip manually
 to the reports bucket that already exists:
 ```bash
-aws s3 cp dist/query.zip s3://fin-reports-rag-881786084229/lambdas/query.zip --region ap-southeast-1
+aws s3 cp dist/query.zip s3://fin-reports-rag-{AccountId}/lambdas/query.zip --region ap-southeast-1
 ```
 
 ---
@@ -149,7 +149,7 @@ Also tried `ap.amazon.nova-pro-v1:0` — invalid. The correct prefix is `apac.`.
 **Symptom**
 ```
 AccessDeniedException: not authorized to perform: bedrock:InvokeModel on resource:
-arn:aws:bedrock:ap-southeast-1:881786084229:inference-profile/apac.amazon.nova-pro-v1:0
+arn:aws:bedrock:ap-southeast-1:{AccountId}:inference-profile/apac.amazon.nova-pro-v1:0
 ```
 
 **Root Cause**
