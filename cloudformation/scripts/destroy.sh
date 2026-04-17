@@ -11,7 +11,7 @@
 set -euo pipefail
 
 REGION="${AWS_DEFAULT_REGION:-us-east-1}"
-ENV="dev"
+ENV=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -21,24 +21,43 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# ── Prompt for environment if not provided ─────────────────────────────────────
+if [ -z "${ENV}" ]; then
+    echo "Select environment to destroy:"
+    echo "  1) dev"
+    echo "  2) prod"
+    read -r -p "Enter choice [1/2]: " ENV_CHOICE
+    case "${ENV_CHOICE}" in
+        1) ENV="dev" ;;
+        2) ENV="prod" ;;
+        *) echo "Invalid choice. Aborting."; exit 1 ;;
+    esac
+fi
+
+if [[ "${ENV}" != "dev" && "${ENV}" != "prod" ]]; then
+    echo "Invalid environment '${ENV}'. Must be 'dev' or 'prod'. Aborting."
+    exit 1
+fi
+
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 STACK_NAME="rag-financial-reports-${ENV}"
 DEPLOY_BUCKET="rag-fin-deploy-${ACCOUNT_ID}-${REGION}"
 
 echo "============================================================"
 echo "  RAG Financial Reports — DESTROY"
-echo "  Stack  : ${STACK_NAME}"
-echo "  Region : ${REGION}"
+echo "  Environment : ${ENV}"
+echo "  Stack       : ${STACK_NAME}"
+echo "  Region      : ${REGION}"
 echo "============================================================"
 echo ""
 echo "This will permanently delete:"
 echo "  - CloudFormation stack: ${STACK_NAME}"
-echo "  - S3 reports bucket and ALL uploaded PDFs"
-echo "  - OpenSearch Serverless collection and ALL indexed data"
+echo "  - S3 reports bucket (fin-reports-rag-${ENV}-${ACCOUNT_ID}) and ALL uploaded PDFs"
+echo "  - OpenSearch collection (fin-reports-rag-${ENV}) and ALL indexed data"
 echo "  - Lambda functions, API Gateway, IAM role"
 echo "  - Deployment bucket: s3://${DEPLOY_BUCKET}"
 echo ""
-read -r -p "Type 'yes' to confirm: " CONFIRM
+read -r -p "Type 'yes' to confirm destruction of '${ENV}' environment: " CONFIRM
 if [ "${CONFIRM}" != "yes" ]; then
     echo "Aborted."
     exit 0

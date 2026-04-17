@@ -14,7 +14,7 @@ set -euo pipefail
 
 # ── Parse args ─────────────────────────────────────────────────────────────────
 REGION="${AWS_DEFAULT_REGION:-us-east-1}"
-ENV="dev"
+ENV=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -24,11 +24,37 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# ── Prompt for environment if not provided ─────────────────────────────────────
+if [ -z "${ENV}" ]; then
+    echo "Select deployment environment:"
+    echo "  1) dev"
+    echo "  2) prod"
+    read -r -p "Enter choice [1/2]: " ENV_CHOICE
+    case "${ENV_CHOICE}" in
+        1) ENV="dev" ;;
+        2) ENV="prod" ;;
+        *) echo "Invalid choice. Aborting."; exit 1 ;;
+    esac
+fi
+
+if [[ "${ENV}" != "dev" && "${ENV}" != "prod" ]]; then
+    echo "Invalid environment '${ENV}'. Must be 'dev' or 'prod'. Aborting."
+    exit 1
+fi
+
+echo ""
+read -r -p "Deploy to '${ENV}' environment in region '${REGION}'? Type 'yes' to confirm: " CONFIRM
+if [ "${CONFIRM}" != "yes" ]; then
+    echo "Aborted."
+    exit 0
+fi
+
 # ── Derived config ─────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 STACK_NAME="rag-financial-reports-${ENV}"
+COLLECTION_NAME="fin-reports-rag-${ENV}"
 DEPLOY_BUCKET="rag-fin-deploy-${ACCOUNT_ID}-${REGION}"
 DIST_DIR="${ROOT_DIR}/dist"
 
@@ -114,6 +140,7 @@ aws cloudformation deploy \
     --capabilities CAPABILITY_NAMED_IAM \
     --parameter-overrides \
         Environment="${ENV}" \
+        CollectionName="${COLLECTION_NAME}" \
         LambdaDeploymentBucket="${DEPLOY_BUCKET}" \
         IngestLambdaS3Key="lambdas/ingest.zip" \
         QueryLambdaS3Key="lambdas/query.zip" \

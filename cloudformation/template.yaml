@@ -105,8 +105,8 @@ Resources:
                   - s3:GetObject
                   - s3:ListBucket
                 Resource:
-                  - !Sub "arn:aws:s3:::fin-reports-rag-${AWS::AccountId}"
-                  - !Sub "arn:aws:s3:::fin-reports-rag-${AWS::AccountId}/*"
+                  - !Sub "arn:aws:s3:::fin-reports-rag-${Environment}-${AWS::AccountId}"
+                  - !Sub "arn:aws:s3:::fin-reports-rag-${Environment}-${AWS::AccountId}/*"
               - Sid: OpenSearchAccess
                 Effect: Allow
                 Action: aoss:APIAccessAll
@@ -174,13 +174,13 @@ Resources:
       FunctionName: !GetAtt IngestLambda.Arn
       Action: lambda:InvokeFunction
       Principal: s3.amazonaws.com
-      SourceArn: !Sub "arn:aws:s3:::fin-reports-rag-${AWS::AccountId}"
+      SourceArn: !Sub "arn:aws:s3:::fin-reports-rag-${Environment}-${AWS::AccountId}"
 
   ReportsBucket:
     Type: AWS::S3::Bucket
     DependsOn: S3InvokeLambdaPermission
     Properties:
-      BucketName: !Sub "fin-reports-rag-${AWS::AccountId}"
+      BucketName: !Sub "fin-reports-rag-${Environment}-${AWS::AccountId}"
       NotificationConfiguration:
         LambdaConfigurations:
           - Event: "s3:ObjectCreated:*"
