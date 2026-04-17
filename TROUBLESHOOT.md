@@ -15,7 +15,7 @@ The CloudFormation data access policy principal was set to the Lambda IAM role A
 Lambda presents at runtime is an *assumed-role* session ARN:
 `arn:aws:sts::881786084229:assumed-role/fin-reports-rag-lambda-dev/fin-reports-rag-ingest-dev`.
 OpenSearch Serverless does exact-string matching on the principal — the two forms don't match.
-
+88XXXXXXXXX9
 **Fix**
 Changed the data access policy principal to the account root:
 ```
