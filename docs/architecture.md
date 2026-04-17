@@ -4,7 +4,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                    RAG FINANCIAL REPORTS — AWS Architecture                  │
+│                    RAG FINANCIAL REPORTS — AWS Architecture                 │
 └─────────────────────────────────────────────────────────────────────────────┘
 
   INGESTION PIPELINE (triggered by S3 upload)
@@ -22,7 +22,7 @@
                                   ▼
                          ┌────────────────────────────────────┐
                          │          Ingest Lambda             │
-                         │  Python 3.11 / 1024 MB / 600s     │
+                         │  Python 3.11 / 1024 MB / 600s      │
                          │                                    │
                          │  1. Parse S3 key → metadata        │
                          │     ticker, report_type,           │
@@ -46,16 +46,16 @@
           │                      │               │  (VECTORSEARCH collection)   │
           │  amazon.titan-       │               │                              │
           │  embed-text-v2:0     │               │  Index: financial-reports    │
-          │                      │               │  ┌──────────────────────┐   │
-          │  Input:  text chunk  │               │  │ embedding  knn_vector│   │
-          │  Output: float[1024] │               │  │ text       text      │   │
-          │  (normalized)        │               │  │ ticker     keyword   │   │
-          └──────────────────────┘               │  │ report_type keyword  │   │
-                                                 │  │ fiscal_period keyword│   │
-                                                 │  │ source     keyword   │   │
-                                                 │  │ chunk_index integer  │   │
-                                                 │  │ doc_id     keyword   │   │
-                                                 │  └──────────────────────┘   │
+          │                      │               │  ┌──────────────────────┐    │
+          │  Input:  text chunk  │               │  │ embedding  knn_vector│    │
+          │  Output: float[1024] │               │  │ text       text      │    │
+          │  (normalized)        │               │  │ ticker     keyword   │    │
+          └──────────────────────┘               │  │ report_type keyword  │    │
+                                                 │  │ fiscal_period keyword│    │
+                                                 │  │ source     keyword   │    │
+                                                 │  │ chunk_index integer  │    │
+                                                 │  │ doc_id     keyword   │    │
+                                                 │  └──────────────────────┘    │
                                                  └──────────────────────────────┘
 
   QUERY PIPELINE (on demand via REST API)
@@ -68,7 +68,7 @@
     "What was AAPL               │
      revenue in 2024?",          ▼
     "ticker": "AAPL",   ┌────────────────────────────────────┐
-    "fiscal_period":    │          Query Lambda               │
+    "fiscal_period":    │          Query Lambda              │
     "2024"              │  Python 3.11 / 512 MB / 30s        │
   }                     │                                    │
                         │  1. Parse request + optional       │
@@ -124,8 +124,7 @@
 EncryptionPolicy ─┐
 NetworkPolicy    ─┤─► VectorCollection ─┐
                                         ├─► LambdaRole ─► IngestLambda ─► S3InvokeLambdaPermission ─► ReportsBucket
-                                        │                                                                            │
-                                        └────────────────────────────────────────────────────────────────────────────┘
+
 
 DataAccessPolicy ─────────────────────────────────────────────── (depends on LambdaRole.Arn)
 
@@ -169,7 +168,7 @@ reports/
 |---|---|---|
 | Embedding model | Titan Embed v2 (1024-dim) | Better quality than v1, normalized vectors, cheaper |
 | Chunk size | 1000 chars, 200 overlap | Financial text is dense; larger chunks preserve table context |
-| LLM | Claude 3.5 Haiku | Good financial reasoning, fast, cost-effective |
+| LLM | Amazon Nova Pro | Good financial reasoning, fast, cost-effective |
 | Metadata filtering | Optional ticker + period filters | Scopes search to prevent cross-company confusion |
 | Index creation | Lambda creates on first run | Ensures correct knn_vector mapping before any inserts |
 | IaC | CloudFormation only (no CDK) | Single YAML file, no Node.js toolchain needed |
