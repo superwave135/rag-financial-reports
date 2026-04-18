@@ -162,24 +162,39 @@ aws logs tail /aws/lambda/fin-reports-rag-ingest-dev --follow --region ap-southe
 
 ```bash
 # Get the API URL from CloudFormation outputs
+aws cloudformation describe-stacks \
+  --stack-name rag-financial-reports-dev \
+  --region ap-southeast-1 \
+  --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" \
+  --output text
+
+# IMPT! Run this to assign the url address to variable API_URL
 API_URL=$(aws cloudformation describe-stacks \
-    --stack-name rag-financial-reports-dev \
-    --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" \
-    --output text)
+  --stack-name rag-financial-reports-dev \
+  --region ap-southeast-1 \
+  --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" \
+  --output text)
 
 # Ask a question
-python scripts/test_query.py \
+python3 scripts/test_query.py \
     --url $API_URL \
     --question "What was Apple's total revenue in 2025?"
 
 # Filter by company
-python scripts/test_query.py \
+python3 scripts/test_query.py \
     --url $API_URL \
     --question "What were the main risk factors?" \
     --ticker NVDA
 
 # Filter by company and period
-python scripts/test_query.py \
+python3 scripts/test_query.py \
+    --url $API_URL \
+    --question "What was net income?" \
+    --ticker AAPL \
+    --period 2025
+
+# Filter by company and period
+python3 scripts/test_query.py \
     --url $API_URL \
     --question "What was net income?" \
     --ticker AAPL \
@@ -187,9 +202,9 @@ python scripts/test_query.py \
 ```
 
 ### Command Query
-(.venv) geekytan@geeky:~/Documents/dev/rag-financial-reports$ python3 scripts/test_query.py \
-    --url "https://9ouylj253k.execute-api.ap-southeast-1.amazonaws.com/prod/query" \
-    --question "What was Apple's EPS in FY2025?"
+python3 scripts/test_query.py \
+    --url "$API_URL" \
+    --question "What was Apple EPS in FY2025?"
 ```
 ============================================================
   Question : What was Apple's EPS in FY2025?
@@ -208,21 +223,17 @@ SOURCES  (1 report(s) cited)
 
 ### Query using curl
 
-```bash
-curl -X POST $API_URL \
-    -H "Content-Type: application/json" \
-    -d '{
-        "question": "What was Apple revenue in FY2025?",
-        "ticker": "AAPL",
-        "fiscal_period": "2025"
-    }'
+```
+curl -s -X POST "$API_URL" -H "Content-Type: application/json" -d '{"question": "What was Apple revenue in FY2025?", "ticker": "AAPL", "fiscal_period": "2025"}' | python3 -m json.tool
+
+curl -s -X POST "$API_URL" -H "Content-Type: application/json" -d '{"question": "Tell me about the legal proceedings in FY2025?", "ticker": "AAPL", "fiscal_period": "2025"}' | python3 -m json.tool
 ```
 
 (.venv) geekytan@geeky:~/Documents/dev/rag-financial-reports$ 
 ###### Command URL
-curl -s -X POST "https://9ouylj253k.execute-api.ap-southeast-1.amazonaws.com/prod/query" -H "Content-Type: application/json" -d '{"question": "What was Apple total revenue in FY2025?", "ticker": "AAPL", "fiscal_period": "2025"}' | python3 -m json.tool
+curl -s -X POST "$API_URL" -H "Content-Type: application/json" -d '{"question": "What was Apple total revenue in FY2025?", "ticker": "AAPL", "fiscal_period": "2025"}' | python3 -m json.tool
 
-curl -s -X POST "https://9ouylj253k.execute-api.ap-southeast-1.amazonaws.com/prod/query" -H "Content-Type: application/json" -d '{"question": "What was the key driver of growth for Apple in FY2025?", "ticker": "AAPL", "fiscal_period": "2025"}' | python3 -m json.tool
+curl -s -X POST "$API_URL" -H "Content-Type: application/json" -d '{"question": "What was the key driver of growth for Apple in FY2025?", "ticker": "AAPL", "fiscal_period": "2025"}' | python3 -m json.tool
 
 ###### Response Answer
 {
